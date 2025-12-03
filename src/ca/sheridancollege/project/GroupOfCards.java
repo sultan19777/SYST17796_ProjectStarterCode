@@ -23,6 +23,7 @@ public class GroupOfCards {
 
     public GroupOfCards(int size) {
         this.size = size;
+        this.cards = new ArrayList<>(); // <--- THIS IS THE FIX
     }
 
     /**
