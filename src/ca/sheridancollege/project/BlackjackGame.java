@@ -14,7 +14,7 @@ import java.util.Scanner;
  * The main controller class for the Blackjack game.
  * It manages the game flow, player interactions, dealer actions, and game state.
  */
-public class BlackjackGame extends Game{
+public class BlackjackGame extends Game {
 
     private Deck deck;
     private BlackjackPlayer player;
@@ -29,8 +29,7 @@ public class BlackjackGame extends Game{
     public BlackjackGame(String name) {
         super(name);
         input = new Scanner(System.in);
-        deck = new Deck();
-        dealer = new Dealer("Dealer");
+        // deck and dealer will be initialized in setupRound()
     }
 
     /**
@@ -52,6 +51,9 @@ public class BlackjackGame extends Game{
 
         // Initialize player with a starting balance, e.g., 100.0
         player = new BlackjackPlayer(playerName, 100.0);
+        // Initialize dealer
+        dealer = new Dealer("Dealer");
+
         System.out.println("Welcome, " + player.getName() + "! You start with $" + player.getBalance());
 
         // Main Game Loop
@@ -68,55 +70,84 @@ public class BlackjackGame extends Game{
         declareWinner();
         input.close();
     }
-/**
+
+    /**
      * Plays a single round of Blackjack.
+     * The turn structure is explicitly sequential: Player's full turn, then Dealer's full turn.
      */
     private void playRound() {
         System.out.println("\n--- New Round ---");
-        deck = new Deck(); // Use a fresh deck each round
-        deck.shuffle();
-        player.resetHand();
-        dealer.resetHand();
+        setupRound();
 
         // 1. Place Bet
         placeBet();
 
         // 2. Deal Initial Cards
-        player.getHand().addCard(deck.dealCard());
-        dealer.getHand().addCard(deck.dealCard()); // Hole card
-        player.getHand().addCard(deck.dealCard());
-        dealer.getHand().addCard(deck.dealCard()); // Face-up card
+        dealInitialCards();
 
         // Show initial state
         System.out.println("\nDealer's face-up card: " + dealer.getFaceUpCard());
         System.out.println("Your hand: " + player.getHand());
 
-        // Check for natural Blackjack
-        if (player.getHand().calculateTotal() == 21) {
+        // Check for natural Blackjack immediately
+        if (hasNaturalBlackjack(player.getHand())) {
             determineWinner(); // Will handle Blackjack payout
-            return;
+            return; // Round ends immediately
         }
 
-        // 3. Player's Turn
-        boolean playerBusted = playerTurn();
-        if (playerBusted) {
-            System.out.println("Bust! You went over 21.");
-            determineWinner();
-            return;
+        // 3. Player's Turn (The whole turn)
+        System.out.println("\n--- Your Turn ---");
+        boolean playerBusted = playPlayerTurn();
+
+        // 4. Dealer's Turn (Only if player didn't bust)
+        if (!playerBusted) {
+            System.out.println("\n--- Dealer's Turn ---");
+            playDealerTurn();
+        } else {
+             // If player busted, dealer doesn't play.
+             // The determineWinner() method handles the "Bust! Dealer Wins" message.
         }
 
-        // 4. Dealer's Turn
-        dealerTurn();
-
-        // 5. Determine Winner
+        // 5. Determine Final Winner
         determineWinner();
     }
 
+    // --- Helper Methods for playRound ---
+
     /**
-     * Handles the player's turn. The player can choose to Hit or Stand.
-     * @return true if the player busts, false otherwise.
+     * Prepares for a new round by creating a fresh deck and resetting hands.
      */
-    private boolean playerTurn() {
+    private void setupRound() {
+        deck = new Deck(); // Use a fresh deck each round
+        deck.shuffle();
+        player.resetHand();
+        dealer.resetHand();
+    }
+
+    /**
+     * Deals two cards to the player and two to the dealer.
+     */
+    private void dealInitialCards() {
+        player.getHand().addCard(deck.dealCard());
+        dealer.getHand().addCard(deck.dealCard()); // Hole card
+        player.getHand().addCard(deck.dealCard());
+        dealer.getHand().addCard(deck.dealCard()); // Face-up card
+    }
+
+    /**
+     * Checks if a hand is a natural Blackjack (2 cards totaling 21).
+     * @param hand The hand to check.
+     * @return true if it's a natural Blackjack, false otherwise.
+     */
+    private boolean hasNaturalBlackjack(Hand hand) {
+        return hand.calculateTotal() == 21 && hand.getSize() == 2;
+    }
+
+    /**
+     * Handles the player's full turn. The player can choose to Hit or Stand repeatedly.
+     * @return true if the player busts, false if they stand.
+     */
+    private boolean playPlayerTurn() {
         while (true) {
             System.out.print("Would you like to [H]it or [S]tand? ");
             String choice = input.nextLine().toUpperCase();
@@ -140,10 +171,9 @@ public class BlackjackGame extends Game{
     }
 
     /**
-     * Handles the dealer's turn. The dealer hits until their total is 17 or higher.
+     * Handles the dealer's full turn. The dealer hits until their total is 17 or higher.
      */
-    private void dealerTurn() {
-        System.out.println("\n--- Dealer's Turn ---");
+    private void playDealerTurn() {
         // Show dealer's full hand (including the hole card)
         System.out.println("Dealer's hand: " + dealer.getHand());
 
@@ -154,13 +184,9 @@ public class BlackjackGame extends Game{
             System.out.println("Dealer hits and draws: " + newCard);
             System.out.println("Dealer's hand: " + dealer.getHand());
         }
-
-        if (dealer.getHand().calculateTotal() > 21) {
-            System.out.println("Dealer busts!");
-        } else {
-            System.out.println("Dealer stands with a total of " + dealer.getHand().calculateTotal());
-        }
+        // Dealer stands or busts. The exact result is handled in determineWinner().
     }
+
     /**
      * Prompts the player to place a bet.
      */
@@ -190,9 +216,9 @@ public class BlackjackGame extends Game{
         double bet = player.getCurrentBet();
 
         // Check for Player Blackjack (natural 21 on first two cards)
-        if (playerTotal == 21 && player.getHand().getSize() == 2) {
+        if (hasNaturalBlackjack(player.getHand())) {
              // Check if dealer also has Blackjack for a push
-             if (dealerTotal == 21 && dealer.getHand().getSize() == 2) {
+             if (hasNaturalBlackjack(dealer.getHand())) {
                  System.out.println("Both have Blackjack! It's a Push. Bet returned.");
                  player.addWinnings(bet);
              } else {
@@ -266,4 +292,3 @@ public class BlackjackGame extends Game{
         game.play();
     }
 }
-
